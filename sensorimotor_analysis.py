@@ -1,27 +1,35 @@
-import numpy as np
+import os
+from os.path import join
 import argparse
 import textwrap
 import sys
-
 import time
 import progressbar
 
 import pandas as pd
-import matplotlib.pyplot as plt
-from peakutils.peak import indexes
+import numpy as np
 import scipy.interpolate as interpolate
-from scipy.signal import butter, filtfilt, lfilter, freqz, find_peaks_cwt
+from scipy.signal import butter, filtfilt
 from scipy.integrate import simps
 from numpy import trapz
-import peakutils
-from IPython.display import Image, display
-import os
-from os.path import join
+
+import matplotlib.pyplot as plt
 import seaborn as sns
 
-#%matplotlib inline
-
 # kcho, Monday, November 06, 2017
+
+def interpolate_df(df, gap):
+    f = interpolate.interp1d(df['time[us]'], df['volt(fsr)[v]'])
+    y = f(np.arange(df['time[us]'].min(), df['time[us]'].max(), gap))
+
+    f_signal = interpolate.interp1d(df['time[us]'], df['signal'], kind='nearest')
+    y_signal = f_signal(np.arange(df['time[us]'].min(), df['time[us]'].max(), gap))
+    
+    data_reponse_interp = pd.DataFrame({'time[us]':np.arange(df['time[us]'].min(), 
+                                                             df['time[us]'].max(), gap),
+                                        'volt(fsr)[v]':y,
+                                        'signal':y_signal})
+    return data_reponse_interp
 
 
 def split_df(df):
@@ -43,37 +51,28 @@ def split_df(df):
 
     # Estimate the time difference between each signal
     # [1] has been appended at the end in order to make the length of the matrices equal
-    cut_window_div_index = np.append(np.ediff1d(signal_first_ones_index), [1])
+    #cut_window_div_index = np.append(np.ediff1d(signal_first_ones_index), [1])
+    cut_window_div_index = np.ediff1d(signal_first_ones_index)
+    #cut_window_div_index = signal_first_ones_index - 5000
 
     # divided by 2 in order to shift the index by half
     # this will make the sound signal to be near the center
-    cut_time = signal_first_ones_index - (cut_window_div_index)/2
+    #cut_time = signal_first_ones_index - (cut_window_div_index)/2
+    cut_time = signal_first_ones_index[:-1] + (cut_window_div_index)/2
 
-    data_split = np.split(df, cut_time.astype('int'))[1:]
+    #data_split = np.split(df, cut_time.astype('int'))[1:]
+    data_split = np.split(df, cut_time.astype('int'))
     return data_split
 
-def interpolate_df(df, gap):
-    f = interpolate.interp1d(df['time[us]'], df['volt(fsr)[v]'])
-    y = f(np.arange(df['time[us]'].min(), df['time[us]'].max(), gap))
-
-    f_signal = interpolate.interp1d(df['time[us]'], df['signal'], kind='nearest')
-    y_signal = f_signal(np.arange(df['time[us]'].min(), df['time[us]'].max(), gap))
     
-    data_reponse_interp = pd.DataFrame({'time[us]':np.arange(df['time[us]'].min(), 
-                                                             df['time[us]'].max(), gap),
-                                        'volt(fsr)[v]':y,
-                                        'signal':y_signal})
-    return data_reponse_interp
-
-    
-def remove_partial_peaks(df):
-    cut_index_thr = np.diff(df[df['volt(fsr)[v]'] > 80].index).argmax()
-    cut_index = df[df['volt(fsr)[v]'] > 80].index.values[cut_index_thr]
+def remove_partial_peaks(df, touch_threshold):
+    cut_index_thr = np.diff(df[df['volt(fsr)[v]'] > touch_threshold].index).argmax()
+    cut_index = df[df['volt(fsr)[v]'] > touch_threshold].index.values[cut_index_thr]
 
     # select longer part of the response
     first_df_tmp = df.ix[:cut_index]
     second_df_tmp = df.ix[cut_index:]
-    get_longer_df = lambda x,y : x if len(x[x['volt(fsr)[v]']>80]) > len(y[y['volt(fsr)[v]']>80]) else y
+    get_longer_df = lambda x,y : x if len(x[x['volt(fsr)[v]']>touch_threshold]) > len(y[y['volt(fsr)[v]']>touch_threshold]) else y
     new = get_longer_df(first_df_tmp, second_df_tmp)
     new = new.reindex_like(df)
     new['time[us]'] = df['time[us]']
@@ -141,15 +140,15 @@ def plot_epoch_graph(df, num, first_touch_index, last_touch_index, first_peak_in
     plt.close()
     
     
-def temporal_recalibration(csvLoc):
+def sensorimotor_asynchrony(csvLoc):
     data = pd.read_csv(csvLoc, sep=',')
 
 #     data['volt(fsr)[v]'] = (3.3/4096) * data['volt(fsr)[v]']
 
-    #interpolation
+    # Interpolation
     data_reponse_interp_360 = interpolate_df(data, 360)
     
-    #data split
+    # Data split
     data_split = split_df(data_reponse_interp_360)
     print(len(data_split), 'data_split length')
     
@@ -159,18 +158,24 @@ def temporal_recalibration(csvLoc):
     timing_df = pd.DataFrame()
     figlocs = []
 
+    # Progressive bar
     bar = progressbar.ProgressBar(max_value=len(data_split), redirect_stdout=True)
+
+    touch_threshold = 80
+    # Iterate each epochs
     for num, df_tmp in enumerate(data_split, 1):
-        if len(df_tmp[df_tmp['volt(fsr)[v]'] > 80]) == 0:
+        # If there is no touch response above the threshold,
+        # add this epoch to the missing epoch list
+        if len(df_tmp[df_tmp['volt(fsr)[v]'] > touch_threshold]) == 0:
             missing_epochs.append(num)
             continue
 
-        # if there are more than two responses
-        elif np.any(np.diff(df_tmp[df_tmp['volt(fsr)[v]'] > 80].index)!=1):
-            df_tmp = remove_partial_peaks(df_tmp)
+        # If there are more than two responses
+        elif np.any(np.diff(df_tmp[df_tmp['volt(fsr)[v]'] > touch_threshold].index)!=1):
+            df_tmp = remove_partial_peaks(df_tmp, touch_threshold)
             
         # first and last contact
-        first_touch_index, last_touch_index = df_tmp[df_tmp['volt(fsr)[v]'] > 80].index.values[[0, -1]]
+        first_touch_index, last_touch_index = df_tmp[df_tmp['volt(fsr)[v]'] > touch_threshold].index.values[[0, -1]]
         first_touch_time = df_tmp.ix[first_touch_index, 'time[us]']
         last_touch_time = df_tmp.ix[last_touch_index, 'time[us]']
         
@@ -224,8 +229,9 @@ def temporal_recalibration(csvLoc):
             df_tmp = df_tmp[df_tmp['volt(fsr)[v]'] != 0].reset_index()
             response_only_df = pd.concat([response_only_df, df_tmp['volt(fsr)[v]']], axis=1)
             plt.plot(df_tmp.reset_index().index * 360, df_tmp['volt(fsr)[v]'])
+
+        # Update progress bar
         bar.update(num)
-    #plt.show()
 
     dirName = os.path.dirname(csvLoc)
     filename_wo_extention = os.path.basename(csvLoc).split('.')[0]
@@ -278,8 +284,7 @@ if __name__=='__main__':
             '''.format(codeName=os.path.basename(__file__))))
     parser.add_argument(
         '-d', '--directory',
-        help='Data directory location, default=pwd',
-        default=os.getcwd())
+        help='Data directory location')
     parser.add_argument(
         '-i', '--inputFile',
         help='Lodation of the data log textfile',
@@ -287,14 +292,18 @@ if __name__=='__main__':
 
     args = parser.parse_args()
 
-    #if args.directory:
-        #textFiles = [join(args.directory, x) for x in os.listdir(args.directory) if x.endswith('txt')]
-        #for textFile in textFiles:
-            #print(textFile)
-            #temporal_recalibration(textFile)
+    if args.directory:
+        textFiles = [join(args.directory, x) for x in os.listdir(args.directory) if x.endswith('txt')]
+        for textFile in textFiles:
+            print(textFile)
+            try:
+                sensorimotor_asynchrony(textFile)
+            except:
+                pass
     if args.inputFile:
         for textFile in args.inputFile:
-            temporal_recalibration(textFile)
+            print(textFile)
+            sensorimotor_asynchrony(textFile)
     else:
         sys.exit('Please read how to use the script')
 
