@@ -132,7 +132,8 @@ def plot_epoch_graph(df, num, first_touch_index, last_touch_index, first_peak_in
     axes.set_xlim(df['time[us]'].values[0], df['time[us]'].values[-1])
     axes.set_xlabel('Time [us]')
     axes.set_ylabel('Volt (fsr) [v]')
-    axes.set_ylim(0, 2500)
+    #axes.set_ylim(0, 2500)
+    axes.set_ylim(0, (3.3/4096) * 2500)
     axes.set_title('Epoch : {}'.format(num))
     axes.set_xticklabels(axes.get_xticks().astype('int'), rotation=30)
     figloc = join(os.getcwd(), 'temporal_{}.png'.format(str(num).zfill(3)))
@@ -143,7 +144,7 @@ def plot_epoch_graph(df, num, first_touch_index, last_touch_index, first_peak_in
 def sensorimotor_asynchrony(csvLoc):
     data = pd.read_csv(csvLoc, sep=',')
 
-#     data['volt(fsr)[v]'] = (3.3/4096) * data['volt(fsr)[v]']
+    data['volt(fsr)[v]'] = (3.3/4096) * data['volt(fsr)[v]']
 
     # Interpolation
     data_reponse_interp_360 = interpolate_df(data, 360)
@@ -161,9 +162,10 @@ def sensorimotor_asynchrony(csvLoc):
     # Progressive bar
     bar = progressbar.ProgressBar(max_value=len(data_split), redirect_stdout=True)
 
-    touch_threshold = 80
+    #touch_threshold = 80
+    touch_threshold = (3.3/4096) * 80
     # Iterate each epochs
-    for num, df_tmp in enumerate(data_split, 1):
+    for num, df_tmp in enumerate(data_split[:10], 1):
         # If there is no touch response above the threshold,
         # add this epoch to the missing epoch list
         if len(df_tmp[df_tmp['volt(fsr)[v]'] > touch_threshold]) == 0:
