@@ -271,8 +271,8 @@ if __name__=='__main__':
     parser.add_argument(
         '-i', '--inputFile',
         help='Lodation of the data log textfile',
-        nargs='+',
-        action='store_true')
+        nargs='+')
+
     args = parser.parse_args()
 
 
