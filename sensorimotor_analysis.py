@@ -3,6 +3,9 @@ import argparse
 import textwrap
 import sys
 
+import time
+import progressbar
+
 import pandas as pd
 import matplotlib.pyplot as plt
 from peakutils.peak import indexes
@@ -13,6 +16,7 @@ from numpy import trapz
 import peakutils
 from IPython.display import Image, display
 import os
+from os.path import join
 import seaborn as sns
 
 #%matplotlib inline
@@ -26,10 +30,10 @@ def split_df(df):
 
     # difference between consecutive element
     pre_post_signal_diff = np.ediff1d(df['signal'])
-    plt.plot(pre_post_signal_diff[:10000], 'r')
 
     # where the difference is +1 : Signal turning on (0 --> 1)
     # 1 has been added to return the index of first 'on'
+
     signal_first_ones_index = np.where(pre_post_signal_diff==1)[0] + 1
     signal_first_ones_time = df.loc[signal_first_ones_index, 'time[us]'].values
 
@@ -132,7 +136,7 @@ def plot_epoch_graph(df, num, first_touch_index, last_touch_index, first_peak_in
     axes.set_ylim(0, 2500)
     axes.set_title('Epoch : {}'.format(num))
     axes.set_xticklabels(axes.get_xticks().astype('int'), rotation=30)
-    figloc = join(os.getpwd(), 'temporal_{}.png'.format(str(num).zfill(3)))
+    figloc = join(os.getcwd(), 'temporal_{}.png'.format(str(num).zfill(3)))
     plt.savefig(figloc, bbox_inches = 'tight')
     plt.close()
     
@@ -141,13 +145,12 @@ def temporal_recalibration(csvLoc):
     data = pd.read_csv(csvLoc, sep=',')
 
 #     data['volt(fsr)[v]'] = (3.3/4096) * data['volt(fsr)[v]']
+
     #interpolation
-    
     data_reponse_interp_360 = interpolate_df(data, 360)
     
     #data split
     data_split = split_df(data_reponse_interp_360)
-    
     print(len(data_split), 'data_split length')
     
     missing_epochs = []
@@ -155,6 +158,8 @@ def temporal_recalibration(csvLoc):
     response_only_df = pd.DataFrame()
     timing_df = pd.DataFrame()
     figlocs = []
+
+    bar = progressbar.ProgressBar(max_value=len(data_split), redirect_stdout=True)
     for num, df_tmp in enumerate(data_split, 1):
         if len(df_tmp[df_tmp['volt(fsr)[v]'] > 80]) == 0:
             missing_epochs.append(num)
@@ -183,8 +188,12 @@ def temporal_recalibration(csvLoc):
                                        df_tmp.ix[first_touch_index:last_touch_index, 'time[us]'])
 
         # Graph
-        plot_epoch_graph(df_tmp, num, first_touch_index, last_touch_index, first_peak_index, first_peak_value, first_peak_time, second_peak_index, second_peak_value, second_peak_time)
-        figlocs.append(join(os.getpwd(), 'temporal_{}.png'.format(str(num).zfill(3))))
+        plot_epoch_graph(df_tmp, num, 
+                         first_touch_index, last_touch_index, 
+                         first_peak_index, first_peak_value, first_peak_time, 
+                         second_peak_index, second_peak_value, second_peak_time)
+
+        figlocs.append(join(os.getcwd(), 'temporal_{}.png'.format(str(num).zfill(3))))
         
         # Error detection
         # If first peak is far from the first touch
@@ -193,6 +202,7 @@ def temporal_recalibration(csvLoc):
 #             error_epochs.append(num)
         else:
             timing_df_tmp = pd.DataFrame({'epoch':[num],
+                                          'sound_onset_time':first_sound_time,
                                           'first_touch_time(FT)':first_touch_time,
                                           'first_peak_time(FP)':first_peak_time,
                                           'second_peak_time(SP)':second_peak_time,
@@ -214,18 +224,20 @@ def temporal_recalibration(csvLoc):
             df_tmp = df_tmp[df_tmp['volt(fsr)[v]'] != 0].reset_index()
             response_only_df = pd.concat([response_only_df, df_tmp['volt(fsr)[v]']], axis=1)
             plt.plot(df_tmp.reset_index().index * 360, df_tmp['volt(fsr)[v]'])
-    plt.show()
-    
+        bar.update(num)
+    #plt.show()
+
     dirName = os.path.dirname(csvLoc)
     filename_wo_extention = os.path.basename(csvLoc).split('.')[0]
     dirName_filename_wo_ext = os.path.join(dirName, filename_wo_extention)
+    plt.savefig(dirName_filename_wo_ext+'_all_plots.png', bbox_inches = 'tight')
+
     # Make GIF
     cmd = 'convert -delay 30 -loop 0 {} {}'.format(' '.join(figlocs), dirName_filename_wo_ext+'.gif')
     os.popen(cmd).read()
+    for pngImg in figlocs:
+        os.remove(pngImg)
 
-    #with open(dirName_filename_wo_ext+'.gif', 'rb') as f:
-        #display(Image(data=f.read()), format="gif")
-        
     # Tsplot
     response_only_df.columns = np.arange(1, len(response_only_df.columns)+1)
     response_only_df = response_only_df.stack().reset_index()
@@ -239,7 +251,7 @@ def temporal_recalibration(csvLoc):
                value='response')
     axes.set_xlabel('Time in us')
     axes.set_ylabel('Volt (fsr) in v')
-    plt.show()
+    plt.savefig(dirName_filename_wo_ext+'_tsplot.png', bbox_inches = 'tight')
 
     # IRI estimation
     IRI_df = timing_df.diff().describe().ix[['count', 'mean', 'std', 'min', 'max']].T
@@ -275,12 +287,12 @@ if __name__=='__main__':
 
     args = parser.parse_args()
 
-
-    if args.directory:
-        textFiles = [join(args.dir, x) for x in os.listdir(args.dir) if x.endswith('txt')]
-        for textFile in textFiles:
-            temporal_recalibration(textFile)
-    elif args.inputFile:
+    #if args.directory:
+        #textFiles = [join(args.directory, x) for x in os.listdir(args.directory) if x.endswith('txt')]
+        #for textFile in textFiles:
+            #print(textFile)
+            #temporal_recalibration(textFile)
+    if args.inputFile:
         for textFile in args.inputFile:
             temporal_recalibration(textFile)
     else:
