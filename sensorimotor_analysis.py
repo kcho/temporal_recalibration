@@ -39,26 +39,29 @@ def split_df(df):
     # difference between consecutive element
     pre_post_signal_diff = np.ediff1d(df['signal'])
 
-    # where the difference is +1 : Signal turning on (0 --> 1)
-    # 1 has been added to return the index of first 'on'
+    if len(pre_post_signal_diff) > 20:
+        # where the difference is +1 : Signal turning on (0 --> 1)
+        # 1 has been added to return the index of first 'on'
 
-    signal_first_ones_index = np.where(pre_post_signal_diff==1)[0] + 1
-    signal_first_ones_time = df.loc[signal_first_ones_index, 'time[us]'].values
+        signal_first_ones_index = np.where(pre_post_signal_diff==1)[0] + 1
+        signal_first_ones_time = df.loc[signal_first_ones_index, 'time[us]'].values
 
-    signal_last_ones_index = np.where(pre_post_signal_diff==-1)[0]
-    signal_last_ones_time = df.loc[signal_last_ones_index, 'time[us]'].values
+        signal_last_ones_index = np.where(pre_post_signal_diff==-1)[0]
+        signal_last_ones_time = df.loc[signal_last_ones_index, 'time[us]'].values
 
 
-    # Estimate the time difference between each signal
-    # [1] has been appended at the end in order to make the length of the matrices equal
-    #cut_window_div_index = np.append(np.ediff1d(signal_first_ones_index), [1])
-    cut_window_div_index = np.ediff1d(signal_first_ones_index)
-    #cut_window_div_index = signal_first_ones_index - 5000
+        # Estimate the time difference between each signal
+        # [1] has been appended at the end in order to make the length of the matrices equal
+        #cut_window_div_index = np.append(np.ediff1d(signal_first_ones_index), [1])
+        cut_window_div_index = np.ediff1d(signal_first_ones_index)
+        #cut_window_div_index = signal_first_ones_index - 5000
 
-    # divided by 2 in order to shift the index by half
-    # this will make the sound signal to be near the center
-    #cut_time = signal_first_ones_index - (cut_window_div_index)/2
-    cut_time = signal_first_ones_index[:-1] + (cut_window_div_index)/2
+        # divided by 2 in order to shift the index by half
+        # this will make the sound signal to be near the center
+        #cut_time = signal_first_ones_index - (cut_window_div_index)/2
+        cut_time = signal_first_ones_index[:-1] + (cut_window_div_index)/2
+
+    # no sound signal analysis should be added here
 
     #data_split = np.split(df, cut_time.astype('int'))[1:]
     data_split = np.split(df, cut_time.astype('int'))
@@ -165,7 +168,7 @@ def sensorimotor_asynchrony(csvLoc):
     #touch_threshold = 80
     touch_threshold = (3.3/4096) * 80
     # Iterate each epochs
-    for num, df_tmp in enumerate(data_split[:10], 1):
+    for num, df_tmp in enumerate(data_split, 1):
         # If there is no touch response above the threshold,
         # add this epoch to the missing epoch list
         if len(df_tmp[df_tmp['volt(fsr)[v]'] > touch_threshold]) == 0:
@@ -214,8 +217,8 @@ def sensorimotor_asynchrony(csvLoc):
                                           'first_peak_time(FP)':first_peak_time,
                                           'second_peak_time(SP)':second_peak_time,
                                           'last_touch_time(LT)':last_touch_time,
-                                          'first_peak_voltage(FP_volt)':(3.3/4096)*first_peak_value,
-                                          'second_peak_voltage(SP_volt)':(3.3/4096)*second_peak_value,
+                                          'first_peak_voltage(FP_volt)':first_peak_value,
+                                          'second_peak_voltage(SP_volt)':second_peak_value,
                                           'area_under_curve_trapz':area_under_curve_trapz,
                                           'area_under_curve_simps':area_under_curve_simps,
                                           'SP - FP':second_peak_time-first_peak_time,
@@ -224,7 +227,7 @@ def sensorimotor_asynchrony(csvLoc):
                                           'SO - SP':first_sound_time-second_peak_time,
                                           'SO - FT':first_sound_time-first_touch_time,
                                           'SO - LT':first_sound_time-last_touch_time,
-                                          'FP_volt - SP_volt':(3.3/4096)*first_peak_value - (3.3/4096)*second_peak_value
+                                          'FP_volt - SP_volt':first_peak_value - second_peak_value
                                               })
             timing_df = pd.concat([timing_df, timing_df_tmp.set_index('epoch')])
         
