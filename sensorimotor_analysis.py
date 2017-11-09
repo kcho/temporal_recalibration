@@ -40,32 +40,32 @@ def split_df(df, touch_threshold):
     # difference between consecutive element
     pre_post_signal_diff = np.ediff1d(df['signal'])
 
-    if len(pre_post_signal_diff) > 20:
-        # where the difference is +1 : Signal turning on (0 --> 1)
-        # 1 has been added to return the index of first 'on'
+    # where the difference is +1 : Signal turning on (0 --> 1)
+    # 1 has been added to return the index of first 'on'
 
-        signal_first_ones_index = np.where(pre_post_signal_diff==1)[0] + 1
-        signal_first_ones_time = df.loc[signal_first_ones_index, 'time[us]'].values
+    signal_first_ones_index = np.where(pre_post_signal_diff==1)[0] + 1
+    signal_first_ones_time = df.loc[signal_first_ones_index, 'time[us]'].values
 
-        signal_last_ones_index = np.where(pre_post_signal_diff==-1)[0]
-        signal_last_ones_time = df.loc[signal_last_ones_index, 'time[us]'].values
+    signal_last_ones_index = np.where(pre_post_signal_diff==-1)[0]
+    signal_last_ones_time = df.loc[signal_last_ones_index, 'time[us]'].values
 
 
-        # Estimate the time difference between each signal
-        # [1] has been appended at the end in order to make the length of the matrices equal
-        #cut_window_div_index = np.append(np.ediff1d(signal_first_ones_index), [1])
-        cut_window_div_index = np.ediff1d(signal_first_ones_index)
-        #cut_window_div_index = signal_first_ones_index - 5000
+    # Estimate the time difference between each signal
+    # [1] has been appended at the end in order to make the length of the matrices equal
+    #cut_window_div_index = np.append(np.ediff1d(signal_first_ones_index), [1])
+    cut_window_div_index = np.ediff1d(signal_first_ones_index)
+    #cut_window_div_index = signal_first_ones_index - 5000
 
-        # divided by 2 in order to shift the index by half
-        # this will make the sound signal to be near the center
-        #cut_time = signal_first_ones_index - (cut_window_div_index)/2
-        cut_time = signal_first_ones_index[:-1] + (cut_window_div_index)/2
+    # divided by 2 in order to shift the index by half
+    # this will make the sound signal to be near the center
+    #cut_time = signal_first_ones_index - (cut_window_div_index)/2
+    cut_time = signal_first_ones_index[:-1] + (cut_window_div_index)/2
 
     # no sound signal analysis should be added here
     # 1. detect the peaks in the response
     # 2. set cut window 
-    else:
+    if len(cut_time) < 30:
+        print('Has less than 100 sound points. Running peak detection')
         # Threshold response data with touch_threshold
         df.loc[df['volt(fsr)[v]'] < touch_threshold, 'volt(fsr)[v]'] = 0
 
@@ -76,12 +76,11 @@ def split_df(df, touch_threshold):
         diff_in_response[diff_in_response < touch_threshold] = 0
 
         # translation
-        cut_time = diff_in_response[500:]
+        diff_in_response = diff_in_response[500:]
 
         # peak detection
         indexes = find_peaks_cwt(diff_in_response, np.arange(1, 100))
         cut_time = np.array(indexes)
-
 
     #data_split = np.split(df, cut_time.astype('int'))[1:]
     data_split = np.split(df, cut_time.astype('int'))
@@ -172,8 +171,11 @@ def sensorimotor_asynchrony(csvLoc):
     # Interpolation
     data_reponse_interp_360 = interpolate_df(data, 360)
     
+    #touch_threshold = 80
+    touch_threshold = (3.3/4096) * 80
+
     # Data split
-    data_split = split_df(data_reponse_interp_360)
+    data_split = split_df(data_reponse_interp_360, touch_threshold)
     print(len(data_split), 'data_split length')
     
     missing_epochs = []
@@ -185,8 +187,6 @@ def sensorimotor_asynchrony(csvLoc):
     # Progressive bar
     bar = progressbar.ProgressBar(max_value=len(data_split), redirect_stdout=True)
 
-    #touch_threshold = 80
-    touch_threshold = (3.3/4096) * 80
     # Iterate each epochs
     for num, df_tmp in enumerate(data_split, 1):
         # If there is no touch response above the threshold,
