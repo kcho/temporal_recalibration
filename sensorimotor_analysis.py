@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import scipy.interpolate as interpolate
 from scipy.signal import butter, filtfilt
+from scipy.signal import find_peaks_cwt
 from scipy.integrate import simps
 from numpy import trapz
 
@@ -32,7 +33,7 @@ def interpolate_df(df, gap):
     return data_reponse_interp
 
 
-def split_df(df):
+def split_df(df, touch_threshold):
     # split the dataframe
     # for the variation project, the timing of the signal should lie on the center of x-axis
 
@@ -64,6 +65,23 @@ def split_df(df):
     # no sound signal analysis should be added here
     # 1. detect the peaks in the response
     # 2. set cut window 
+    else:
+        # Threshold response data with touch_threshold
+        df.loc[df['volt(fsr)[v]'] < touch_threshold, 'volt(fsr)[v]'] = 0
+
+        # ediff1d in response
+        diff_in_response = np.ediff1d(df['volt(fsr)[v]'])
+
+        # threshold ediff1d
+        diff_in_response[diff_in_response < touch_threshold] = 0
+
+        # translation
+        cut_time = diff_in_response[500:]
+
+        # peak detection
+        indexes = find_peaks_cwt(diff_in_response, np.arange(1, 100))
+        cut_time = np.array(indexes)
+
 
     #data_split = np.split(df, cut_time.astype('int'))[1:]
     data_split = np.split(df, cut_time.astype('int'))
