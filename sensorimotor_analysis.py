@@ -62,6 +62,8 @@ def split_df(df):
         cut_time = signal_first_ones_index[:-1] + (cut_window_div_index)/2
 
     # no sound signal analysis should be added here
+    # 1. detect the peaks in the response
+    # 2. set cut window 
 
     #data_split = np.split(df, cut_time.astype('int'))[1:]
     data_split = np.split(df, cut_time.astype('int'))
