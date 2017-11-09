@@ -64,8 +64,36 @@ def split_df(df, touch_threshold):
     # no sound signal analysis should be added here
     # 1. detect the peaks in the response
     # 2. set cut window 
-    if len(cut_time) < 30:
-        print('Has less than 100 sound points. Running peak detection')
+
+    print(len(cut_time))
+    if 40 > len(cut_time) >= 30:
+        data_split = np.split(df, cut_time.astype('int'))
+
+        df_tmp = pd.concat([data_split[-3], data_split[-2]])
+        print('Spliting remaining half of the response series')
+        # Threshold response data with touch_threshold
+        df_tmp.loc[df['volt(fsr)[v]'] < touch_threshold, 'volt(fsr)[v]'] = 0
+
+        # ediff1d in response
+        diff_in_response = np.ediff1d(df_tmp['volt(fsr)[v]'])
+
+        # threshold ediff1d
+        diff_in_response[diff_in_response < touch_threshold] = 0
+
+        # translation
+        diff_in_response = diff_in_response[500:]
+
+        # peak detection
+        indexes = find_peaks_cwt(diff_in_response, np.arange(1, 100))
+        cut_time = np.array(indexes)[1:]
+        df_tmp_split = np.split(df_tmp, cut_time.astype('int'))
+        data_split = data_split[:-3] + df_tmp_split
+
+        return data_split
+
+
+    elif len(cut_time) < 30:
+        print('Has no time information. Running peak detection using the response')
         # Threshold response data with touch_threshold
         df.loc[df['volt(fsr)[v]'] < touch_threshold, 'volt(fsr)[v]'] = 0
 
@@ -80,11 +108,17 @@ def split_df(df, touch_threshold):
 
         # peak detection
         indexes = find_peaks_cwt(diff_in_response, np.arange(1, 100))
-        cut_time = np.array(indexes)
+        cut_time = np.array(indexes)[1:]
+        data_split = np.split(df, cut_time.astype('int'))
 
-    #data_split = np.split(df, cut_time.astype('int'))[1:]
-    data_split = np.split(df, cut_time.astype('int'))
-    return data_split
+        return data_split
+
+    else:
+        print(cut_time)
+        #data_split = np.split(df, cut_time.astype('int'))[1:]
+        data_split = np.split(df, cut_time.astype('int'))
+
+        return data_split
 
     
 def remove_partial_peaks(df, touch_threshold):
@@ -140,9 +174,15 @@ def plot_epoch_graph(df, num, first_touch_index, last_touch_index, first_peak_in
     # raw data
     axes.plot(df['time[us]'], 
               df['volt(fsr)[v]'], label='Response data')
-    axes.axvspan(df[df['signal']!=0]['time[us]'].values[0], 
-                 df[df['signal']!=0]['time[us]'].values[-1], 
-                 color='r', alpha=0.3, label = 'Sound signal')
+
+    try:
+        # If there is sound
+        axes.axvspan(df[df['signal']!=0]['time[us]'].values[0], 
+                     df[df['signal']!=0]['time[us]'].values[-1], 
+                     color='r', alpha=0.3, label = 'Sound signal')
+    except:
+        # If there is no sound 
+        pass
 
     # labels
     axes.plot(second_peak_time, second_peak_value, 'ro', label='Second peak')
@@ -208,8 +248,14 @@ def sensorimotor_asynchrony(csvLoc):
         first_peak_index, first_peak_value, first_peak_time, second_peak_index, second_peak_value, second_peak_time = get_peak_info(df_tmp)
 
         # Sound information
-        first_sound_index = df_tmp[df_tmp['signal']!=0].index.values[0]
-        first_sound_time = df_tmp.ix[first_sound_index, 'time[us]']
+        try:
+            first_sound_index = df_tmp[df_tmp['signal']!=0].index.values[0]
+            first_sound_time = df_tmp.ix[first_sound_index, 'time[us]']
+        except:
+            # if there is no sound 
+            first_sound_index = 0
+            first_sound_time = 0
+
         
         # Estimate area under curve
         area_under_curve_trapz = trapz(df_tmp.ix[first_touch_index:last_touch_index, 'volt(fsr)[v]'],
