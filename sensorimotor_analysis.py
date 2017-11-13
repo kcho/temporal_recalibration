@@ -228,21 +228,35 @@ def sensorimotor_asynchrony(csvLoc):
     bar = progressbar.ProgressBar(max_value=len(data_split), redirect_stdout=True)
 
     # Iterate each epochs
-    for num, df_tmp in enumerate(data_split, 1):
+    # Exclude first two epochs
+    # The table number starts from 3
+    for num, df_tmp in enumerate(data_split[2:], 1):
+        # Missing epoch is included in the textfile and the figure
+        # Monday, November 13, 2017
+
         # If there is no touch response above the threshold,
         # add this epoch to the missing epoch list
-        if len(df_tmp[df_tmp['volt(fsr)[v]'] > touch_threshold]) == 0:
-            missing_epochs.append(num)
-            continue
+        #if len(df_tmp[df_tmp['volt(fsr)[v]'] > touch_threshold]) == 0:
+            #missing_epochs.append(num)
+            #continue
 
         # If there are more than two responses
-        elif np.any(np.diff(df_tmp[df_tmp['volt(fsr)[v]'] > touch_threshold].index)!=1):
+        #elif np.any(np.diff(df_tmp[df_tmp['volt(fsr)[v]'] > touch_threshold].index)!=1):
+        try:
             df_tmp = remove_partial_peaks(df_tmp, touch_threshold)
+        except:
+            pass
             
-        # first and last contact
-        first_touch_index, last_touch_index = df_tmp[df_tmp['volt(fsr)[v]'] > touch_threshold].index.values[[0, -1]]
-        first_touch_time = df_tmp.ix[first_touch_index, 'time[us]']
-        last_touch_time = df_tmp.ix[last_touch_index, 'time[us]']
+        try:
+            # first and last contact
+            first_touch_index, last_touch_index = df_tmp[df_tmp['volt(fsr)[v]'] > touch_threshold].index.values[[0, -1]]
+            first_touch_time = df_tmp.ix[first_touch_index, 'time[us]']
+            last_touch_time = df_tmp.ix[last_touch_index, 'time[us]']
+        except:
+            first_touch_index, last_touch_index =  df_tmp.index[0], df_tmp.index[0]
+            first_touch_time = df_tmp.ix[first_touch_index, 'time[us]']
+            last_touch_time = df_tmp.ix[last_touch_index, 'time[us]']
+
         
         # Peak information
         first_peak_index, first_peak_value, first_peak_time, second_peak_index, second_peak_value, second_peak_time = get_peak_info(df_tmp)
@@ -272,11 +286,13 @@ def sensorimotor_asynchrony(csvLoc):
         figlocs.append(join(os.getcwd(), 'temporal_{}.png'.format(str(num).zfill(3))))
         
         # Error detection
+        # Monday, November 13, 2017 : error epoch is not excluded out from the script
         # If first peak is far from the first touch
         #if (first_peak_index - first_touch_index) > 25:
             #pass
 #             error_epochs.append(num)
         #else:
+
         timing_df_tmp = pd.DataFrame({'epoch':[num],
                                       'sound_onset_time':first_sound_time,
                                       'first_touch_time(FT)':first_touch_time,
