@@ -273,33 +273,33 @@ def sensorimotor_asynchrony(csvLoc):
         
         # Error detection
         # If first peak is far from the first touch
-        if (first_peak_index - first_touch_index) > 25:
-            pass
+        #if (first_peak_index - first_touch_index) > 25:
+            #pass
 #             error_epochs.append(num)
-        else:
-            timing_df_tmp = pd.DataFrame({'epoch':[num],
-                                          'sound_onset_time':first_sound_time,
-                                          'first_touch_time(FT)':first_touch_time,
-                                          'first_peak_time(FP)':first_peak_time,
-                                          'second_peak_time(SP)':second_peak_time,
-                                          'last_touch_time(LT)':last_touch_time,
-                                          'first_peak_voltage(FP_volt)':first_peak_value,
-                                          'second_peak_voltage(SP_volt)':second_peak_value,
-                                          'area_under_curve_trapz':area_under_curve_trapz,
-                                          'area_under_curve_simps':area_under_curve_simps,
-                                          'SP - FP':second_peak_time-first_peak_time,
-                                          'LT - FT':last_touch_time-first_touch_time,
-                                          'SO - FP':first_sound_time-first_peak_time,
-                                          'SO - SP':first_sound_time-second_peak_time,
-                                          'SO - FT':first_sound_time-first_touch_time,
-                                          'SO - LT':first_sound_time-last_touch_time,
-                                          'FP_volt - SP_volt':first_peak_value - second_peak_value
-                                              })
-            timing_df = pd.concat([timing_df, timing_df_tmp.set_index('epoch')])
-        
-            df_tmp = df_tmp[df_tmp['volt(fsr)[v]'] != 0].reset_index()
-            response_only_df = pd.concat([response_only_df, df_tmp['volt(fsr)[v]']], axis=1)
-            plt.plot(df_tmp.reset_index().index * 360, df_tmp['volt(fsr)[v]'])
+        #else:
+        timing_df_tmp = pd.DataFrame({'epoch':[num],
+                                      'sound_onset_time':first_sound_time,
+                                      'first_touch_time(FT)':first_touch_time,
+                                      'first_peak_time(FP)':first_peak_time,
+                                      'second_peak_time(SP)':second_peak_time,
+                                      'last_touch_time(LT)':last_touch_time,
+                                      'first_peak_voltage(FP_volt)':first_peak_value,
+                                      'second_peak_voltage(SP_volt)':second_peak_value,
+                                      'area_under_curve_trapz':area_under_curve_trapz,
+                                      'area_under_curve_simps':area_under_curve_simps,
+                                      'SP - FP':second_peak_time-first_peak_time,
+                                      'LT - FT':last_touch_time-first_touch_time,
+                                      'SO - FP':first_sound_time-first_peak_time,
+                                      'SO - SP':first_sound_time-second_peak_time,
+                                      'SO - FT':first_sound_time-first_touch_time,
+                                      'SO - LT':first_sound_time-last_touch_time,
+                                      'FP_volt - SP_volt':first_peak_value - second_peak_value
+                                          })
+        timing_df = pd.concat([timing_df, timing_df_tmp.set_index('epoch')])
+    
+        df_tmp = df_tmp[df_tmp['volt(fsr)[v]'] != 0].reset_index()
+        response_only_df = pd.concat([response_only_df, df_tmp['volt(fsr)[v]']], axis=1)
+        plt.plot(df_tmp.reset_index().index * 360, df_tmp['volt(fsr)[v]'])
 
         # Update progress bar
         bar.update(num)
