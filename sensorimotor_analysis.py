@@ -230,7 +230,7 @@ def sensorimotor_asynchrony(csvLoc):
     # Iterate each epochs
     # Exclude first two epochs
     # The table number starts from 3
-    for num, df_tmp in enumerate(data_split[2:], 1):
+    for num, df_tmp in enumerate(data_split[2:], 3):
         # Missing epoch is included in the textfile and the figure
         # Monday, November 13, 2017
 
